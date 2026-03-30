@@ -3,7 +3,7 @@
 
 int main() {
     try {
-        UdpServer server("0.0.0.0", 5060);
+        net::UdpServer server("0.0.0.0", 5060);
         server.run();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
