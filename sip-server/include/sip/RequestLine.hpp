@@ -1,5 +1,4 @@
-#include <cstdint>
-#include <sstream>
+#include <string>
 #include <string_view>
 
 struct RequestLine {
@@ -8,9 +7,4 @@ struct RequestLine {
     std::string sipVersion;
 };
 
-RequestLine parseRequestLine(std::string_view line) {
-    RequestLine requestLine;
-    std::istringstream iss(line);
-    iss >> requestLine.method >> requestLine.uri >> requestLine.sipVersion;
-    return requestLine;
-}
+RequestLine parseRequestLine(std::string_view line);
