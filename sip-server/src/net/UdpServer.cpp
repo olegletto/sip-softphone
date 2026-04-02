@@ -1,5 +1,4 @@
 #include "net/UdpServer.hpp"
-#include "net/Endpoint.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -10,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <array>
+#include <optional>
 
 namespace net {
     UdpServer::UdpServer(const std::string& addr_str, uint16_t port) {
@@ -28,23 +28,31 @@ namespace net {
     UdpServer::~UdpServer() {
         if (sock_ != -1) close(sock_);
     }
+
+    std::optional<Datagram> UdpServer::tryReceive(std::array<char, 1024>& buf) {
+        sockaddr_in client{};
+        socklen_t len = sizeof(client);
+
+        ssize_t n = recvfrom(sock_, buf.data(), buf.size(), 0, (struct sockaddr*)&client, &len);
+        if (n < 0) return std::nullopt;
+
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &client.sin_addr, ip, INET_ADDRSTRLEN);
+        Endpoint endpoint{std::string(ip), ntohs(client.sin_port)};
+
+        return Datagram{static_cast<size_t>(n), endpoint};
+    }
     
     void UdpServer::run() {
         std::array<char, 1024> buf;
-        sockaddr_in client{};
-        socklen_t len = sizeof(client);
     
         while (true) {
-            ssize_t n = recvfrom(sock_, buf.data(), buf.size(), 0, (struct sockaddr*)&client, &len);
-            if (n < 0) continue;
+            auto d = tryReceive(buf);
+            if (!d) continue;
+            auto& [size, endpoint] = d.value();
 
-            char ip[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &client.sin_addr, ip, INET_ADDRSTRLEN);
-            Endpoint endpoint {std::string(ip), ntohs(client.sin_port)};
-            
-            std::string_view msg(buf.data(), std::min((size_t)n, (size_t)80));
+            std::string_view msg(buf.data(), std::min((size_t)size, (size_t)80));
             std::cout << endpoint.ip << ":" << endpoint.port << " -> " << msg << std::endl;
         }
     }
 }
-
