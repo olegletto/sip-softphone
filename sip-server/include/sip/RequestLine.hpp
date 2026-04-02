@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <optional>
 
 namespace sip {
     struct RequestLine {
@@ -10,6 +11,6 @@ namespace sip {
         std::string sipVersion;
     };
     
-    RequestLine parseRequestLine(std::string_view line);
+    std::optional<RequestLine> parseRequestLine(std::string_view line);
 }
 

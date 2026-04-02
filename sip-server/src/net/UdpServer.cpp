@@ -1,15 +1,18 @@
 #include "net/UdpServer.hpp"
+#include "util/Logger.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <iostream>
 #include <stdexcept>
 #include <algorithm>
 #include <string>
+#include <sstream>
 #include <string_view>
 #include <array>
 #include <optional>
+#include <cerrno>
+#include <cstring>
 
 namespace net {
     UdpServer::UdpServer(const std::string& addr_str, uint16_t port) {
@@ -33,8 +36,19 @@ namespace net {
         sockaddr_in client{};
         socklen_t len = sizeof(client);
 
-        ssize_t n = recvfrom(sock_, buf.data(), buf.size(), 0, (struct sockaddr*)&client, &len);
-        if (n < 0) return std::nullopt;
+        ssize_t n = 0;
+        for (;;) {
+            len = sizeof(client);
+            n = recvfrom(sock_, buf.data(), buf.size(), 0, (struct sockaddr*)&client, &len);
+            if (n >= 0) break;
+
+            const int e = errno;
+            if (e == EINTR) {
+                continue;
+            }
+            util::log(util::Level::Warn, strerror(e));
+            return std::nullopt;
+        }
 
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client.sin_addr, ip, INET_ADDRSTRLEN);
@@ -52,7 +66,9 @@ namespace net {
             auto& [size, endpoint] = d.value();
 
             std::string_view msg(buf.data(), std::min((size_t)size, (size_t)80));
-            std::cout << endpoint.ip << ":" << endpoint.port << " -> " << msg << std::endl;
+            std::ostringstream line;
+            line << endpoint.ip << ':' << endpoint.port << " -> " << msg;
+            util::log(util::Level::Info, line.str());
         }
     }
 }
