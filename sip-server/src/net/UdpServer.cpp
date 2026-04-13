@@ -1,4 +1,5 @@
 #include "net/UdpServer.hpp"
+#include "sip/Message.hpp"
 #include "util/Logger.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -65,9 +66,27 @@ namespace net {
             if (!d) continue;
             auto& [size, endpoint] = d.value();
 
-            std::string_view msg(buf.data(), std::min((size_t)size, (size_t)80));
+            const std::string_view package(buf.data(), size);
             std::ostringstream line;
-            line << endpoint.ip << ':' << endpoint.port << " -> " << msg;
+            line << endpoint.ip << ':' << endpoint.port;
+
+            if (const auto msg = sip::parseMessage(package)) {
+                if (msg->request) {
+                    line << " method=" << msg->request->method;
+                } else {
+                    line << " method=?";
+                }
+                const auto& h = msg->headers;
+                const auto cid = h.find("call-id");
+                const auto cs = h.find("cseq");
+                line << " call-id=" << (cid != h.end() ? cid->second : std::string("-"));
+                line << " cseq=" << (cs != h.end() ? cs->second : std::string("-"));
+            } else {
+                line << " sip-parse-failed preview=";
+                line.write(package.data(), static_cast<std::streamsize>(
+                    std::min(package.size(), static_cast<size_t>(80))));
+            }
+
             util::log(util::Level::Info, line.str());
         }
     }

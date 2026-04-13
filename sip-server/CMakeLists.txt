@@ -7,6 +7,7 @@ set(SOURCES
     src/net/UdpServer.cpp
     src/sip/RequestLine.cpp
     src/sip/Headers.cpp
+    src/sip/Message.cpp
 )
 add_executable(sip-server ${SOURCES})
 target_include_directories(sip-server PRIVATE include)
