@@ -8,6 +8,7 @@ set(SOURCES
     src/sip/RequestLine.cpp
     src/sip/Headers.cpp
     src/sip/Message.cpp
+    src/sip/SdpStub.cpp
 )
 add_executable(sip-server ${SOURCES})
 target_include_directories(sip-server PRIVATE include)

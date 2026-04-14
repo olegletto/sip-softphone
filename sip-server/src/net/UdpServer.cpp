@@ -1,5 +1,6 @@
 #include "net/UdpServer.hpp"
 #include "sip/Message.hpp"
+#include "sip/SdpStub.hpp"
 #include "util/Logger.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -81,6 +82,16 @@ namespace net {
                 const auto cs = h.find("cseq");
                 line << " call-id=" << (cid != h.end() ? cid->second : std::string("-"));
                 line << " cseq=" << (cs != h.end() ? cs->second : std::string("-"));
+
+                const auto ct = h.find("content-type");
+                const bool sdpOffer =
+                    ct != h.end() &&
+                    ct->second.find("application/sdp") != std::string::npos;
+                if (sdpOffer && !msg->body.empty()) {
+                    if (const auto sdp = sip::parseSdpStub(msg->body)) {
+                        line << " rtp-offer=" << sdp->ip << ':' << sdp->port;
+                    }
+                }
             } else {
                 line << " sip-parse-failed preview=";
                 line.write(package.data(), static_cast<std::streamsize>(
