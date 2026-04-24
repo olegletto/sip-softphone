@@ -9,6 +9,7 @@ set(SOURCES
     src/sip/Headers.cpp
     src/sip/Message.cpp
     src/sip/SdpStub.cpp
+    src/sip/Registrar.cpp
 )
 add_executable(sip-server ${SOURCES})
 target_include_directories(sip-server PRIVATE include)

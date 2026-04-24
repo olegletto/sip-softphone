@@ -1,6 +1,7 @@
 #include "net/UdpServer.hpp"
 #include "sip/Message.hpp"
 #include "sip/SdpStub.hpp"
+#include "sip/Registrar.hpp"
 #include "util/Logger.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -13,6 +14,7 @@
 #include <string_view>
 #include <array>
 #include <optional>
+#include <chrono>
 #include <cerrno>
 #include <cstring>
 
@@ -61,6 +63,7 @@ namespace net {
     
     void UdpServer::run() {
         std::array<char, 1024> buf;
+        sip::Registrar registrar;
     
         while (true) {
             auto d = tryReceive(buf);
@@ -74,6 +77,40 @@ namespace net {
             if (const auto msg = sip::parseMessage(package)) {
                 if (msg->request) {
                     line << " method=" << msg->request->method;
+
+                    if (msg->request->method == "REGISTER") {
+                        const auto& h = msg->headers;
+                        const auto to = h.find("to");
+                        const auto expires = h.find("expires");
+                        const auto contact = h.find("contact");
+                        if (to == h.end() || to->second.empty()) {
+                            util::log(util::Level::Warn, "REGISTER missing To header");
+                        } else {
+                            int expiresSeconds = 3600;
+                            if (expires != h.end() && !expires->second.empty()) {
+                                try {
+                                    expiresSeconds = std::stoi(expires->second);
+                                } catch (...) {
+                                    expiresSeconds = 3600;
+                                }
+                                if (expiresSeconds <= 0) {
+                                    expiresSeconds = 3600;
+                                }
+                            }
+
+                            const auto now = std::chrono::steady_clock::now();
+                            const std::string& aor = to->second;
+                            const std::string contactValue = (contact != h.end() ? contact->second : "");
+
+                            registrar.upsert(
+                                aor,
+                                sip::Registration{endpoint, contactValue, now + std::chrono::seconds(expiresSeconds)});
+
+                            line << " aor=" << aor << " expires=" << expiresSeconds
+                                 << " registrar-size=" << registrar.size()
+                                 << " from=" << endpoint.ip << ':' << endpoint.port;
+                        }
+                    }
                 } else {
                     line << " method=?";
                 }
