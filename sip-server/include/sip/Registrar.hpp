@@ -16,6 +16,7 @@ struct Registration {
 class Registrar {
     public:
     void upsert(const std::string& aor, const Registration& registration);
+    size_t purgeExpired(std::chrono::steady_clock::time_point now);
     size_t size() const;
     private:
     std::map<std::string, Registration> registrations_;

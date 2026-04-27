@@ -2,9 +2,11 @@
 
 #include <array>
 #include <string>
+#include <string_view>
 #include <cstdint>
 #include <optional>
 #include "net/Datagram.hpp"
+#include "net/Endpoint.hpp"
 
 namespace net {
     class UdpServer {
@@ -16,6 +18,8 @@ namespace net {
         UdpServer& operator=(const UdpServer&) = delete;
 
         void run();
+
+        bool sendTo(const net::Endpoint& to, std::string_view payload);
 
     private:
         std::optional<Datagram> tryReceive(std::array<char, 1024>& buf);

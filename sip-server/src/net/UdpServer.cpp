@@ -1,4 +1,5 @@
 #include "net/UdpServer.hpp"
+#include "net/Endpoint.hpp"
 #include "sip/Message.hpp"
 #include "sip/SdpStub.hpp"
 #include "sip/Registrar.hpp"
@@ -34,6 +35,24 @@ namespace net {
     
     UdpServer::~UdpServer() {
         if (sock_ != -1) close(sock_);
+    }
+
+    bool UdpServer::sendTo(const net::Endpoint& to, std::string_view payload) {
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(to.port);
+        if (inet_pton(AF_INET, to.ip.c_str(), &addr.sin_addr) != 1) {
+            return false;
+        }
+        const auto sent = sendto(
+            sock_,
+            payload.data(),
+            payload.size(),
+            0,
+            (sockaddr*)&addr,
+            sizeof(addr)
+        );
+        return sent == static_cast<ssize_t>(payload.size());
     }
 
     std::optional<Datagram> UdpServer::tryReceive(std::array<char, 1024>& buf) {
@@ -102,13 +121,71 @@ namespace net {
                             const std::string& aor = to->second;
                             const std::string contactValue = (contact != h.end() ? contact->second : "");
 
+                            size_t purged = registrar.purgeExpired(now);
                             registrar.upsert(
                                 aor,
                                 sip::Registration{endpoint, contactValue, now + std::chrono::seconds(expiresSeconds)});
-
+                                
                             line << " aor=" << aor << " expires=" << expiresSeconds
                                  << " registrar-size=" << registrar.size()
+                                 << " purged=" << purged
                                  << " from=" << endpoint.ip << ':' << endpoint.port;
+ 
+                            bool okToReply = true;
+                            std::string response = "SIP/2.0 200 OK\r\n";
+                            auto via = h.find("via"); 
+                            if (via==h.end() || via->second.empty()) { 
+                                util::log(util::Level::Warn, "REGISTER missing Via header");
+                                okToReply = false; 
+                            } else {
+                                response += "Via: " + via->second + "\r\n";
+                            }
+
+                            auto from = h.find("from");
+                            if (from==h.end() || from->second.empty()) {
+                                util::log(util::Level::Warn, "REGISTER missing From header");
+                                okToReply = false;
+                            } else {
+                                response += "From: " + from->second + "\r\n";
+                            }
+                         
+                            if (to==h.end() || to->second.empty()) {
+                                util::log(util::Level::Warn, "REGISTER missing To header");
+                                okToReply = false;
+                            } else {
+                                response += "To: " + to->second + "\r\n";
+                            }
+                                        
+
+                            auto callid = h.find("call-id");
+                            if (callid==h.end() || callid->second.empty()) {
+                                util::log(util::Level::Warn, "REGISTER missing Call-ID header");
+                                okToReply = false;
+                            } else {
+                                response += "Call-ID: " + callid->second + "\r\n";
+                            }
+
+                            auto cseq = h.find("cseq");
+                            if (cseq==h.end() || cseq->second.empty()) {
+                                util::log(util::Level::Warn, "REGISTER missing CSeq header");
+                                okToReply = false;
+                            } else {
+                                response += "CSeq: " + cseq->second + "\r\n";
+                            }
+
+                            response += "Content-Length: 0\r\n";
+                            response += "\r\n";
+
+                            if (!okToReply) {
+                                util::log(util::Level::Warn, "REGISTER missing required headers");
+                            } else {
+                                const bool sent = sendTo(endpoint, response);
+                                if (sent) {
+                                    line << " sent=" << sent;
+                                } else {
+                                    util::log(util::Level::Warn, "REGISTER send failed");
+                                }
+                            }
                         }
                     }
                 } else {
