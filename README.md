@@ -49,3 +49,7 @@ cmake --build build
 ```
 
 The server listens for SIP on port **5060**. Any SIP client can register against this host/port.
+
+## License
+
+[MIT](LICENSE)
